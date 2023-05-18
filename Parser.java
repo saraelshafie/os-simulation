@@ -6,9 +6,12 @@ import java.io.IOException;
 public class Parser {
 
     String fileName;
+    Object [] memory;
 
-    public Parser(String fileName){
+    public Parser(String fileName, Object[] memory){
+
         this.fileName = fileName;
+        this.memory = memory;
     }
 
     public void parse() throws IOException {
