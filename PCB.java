@@ -1,9 +1,19 @@
 public class PCB {
+    static int maxID = 0;
     private int pid;
     private State state;
     private int PC;
     private int startBoundary;
     private int endBoundary;
+
+
+    public PCB(int PC, int startBoundary, int endBoundary) {
+        this.PC = PC;
+        this.startBoundary = startBoundary;
+        this.endBoundary = endBoundary;
+        this.pid = ++maxID;
+        this.state = State.READY;
+    }
 
     public int getPid() {
         return pid;

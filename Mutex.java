@@ -1,15 +1,16 @@
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.Queue;
 
 public class Mutex {
     private Queue resourceBlocked;
     private int ownerID;
-
     private Status status;
     private Scheduler scheduler;
 
-    public Mutex(Queue resourceBlocked, Status status, Scheduler scheduler) {
-        this.resourceBlocked = resourceBlocked;
-        this.status = status;
+    public Mutex(Scheduler scheduler) {
+        this.resourceBlocked = new LinkedList<>();
+//        this.status = status;
         this.scheduler = scheduler;
     }
 
@@ -46,9 +47,9 @@ public class Mutex {
     }
 
     public void semWait(Process p) {
-        if (status == status.ONE) {
+        if (status == Status.ONE) {
             ownerID = p.getID();
-            status = status.ZERO;
+            status = Status.ZERO;
         } else {
             resourceBlocked.add(p);
             scheduler.getBlocked().add(p);
@@ -58,7 +59,7 @@ public class Mutex {
     public void semSignal(Process p) {
         if (ownerID == p.getID()) {
             if (resourceBlocked.isEmpty())
-                status = status.ONE;
+                status = Status.ONE;
             else {
                 Process pNew = (Process) resourceBlocked.remove();
                 scheduler.getBlocked().remove(pNew);

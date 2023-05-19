@@ -1,20 +1,39 @@
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.util.Scanner;
+
 public class Process {
     private PCB pcb;
+    public Pair[] memory;
 
+    public Process() {
 
-    public int getID(){
+    }
+
+    public Process(PCB pcb, Pair[] memory) {
+        this.pcb = pcb;
+        this.memory = memory;
+    }
+
+    public int getID() {
         return pcb.getPid();
     }
 
-    public State getState(){
+    public State getState() {
         return pcb.getState();
     }
-    public void setState(State state){
+
+    public void setState(State state) {
         pcb.setState(state);
     }
 
-    public int getPC(){
+    public int getPC() {
         return pcb.getPC();
+    }
+
+    public void setPC(int pc) {
+        pcb.setPC(pc);
     }
 
     public int getEndBoundary() {
@@ -25,7 +44,29 @@ public class Process {
         return pcb.getStartBoundary();
     }
 
-    public void execute(String instruction){
+    public boolean addVar(String varName, Object value) {
+        Pair<String, Object> pair = new Pair<>(varName, value);
 
+        for (int i = this.getStartBoundary(); i < this.getEndBoundary(); i++) {
+            if (memory[i].getKey() != null && memory[i].getValue() != null) continue;
+            memory[i] = pair;
+            return true;
+        }
+
+        //if this is reached, no memory location is free
+        //don't think we'll need this however
+        System.out.println("ADDRESS SPACE FULL, COULD NOT DEFINE MORE VARIABLES");
+        return false;
     }
+
+    public Object getVar(String varName) {
+        for (int i = this.getStartBoundary(); i < this.getEndBoundary(); i++) {
+            if (memory[i] == null) continue;
+            if (memory[i].getKey().equals(varName))
+                return memory[i].getValue();
+        }
+        return null;
+    }
+
+
 }
