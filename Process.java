@@ -5,7 +5,7 @@ import java.util.Scanner;
 
 public class Process {
     private PCB pcb;
-    public Pair[] memory;
+    public Pair<String, Object>[] memory;
 
     public Process() {
 
@@ -55,7 +55,7 @@ public class Process {
 
         //if this is reached, no memory location is free
         //don't think we'll need this however
-        System.out.println("ADDRESS SPACE FULL, COULD NOT DEFINE MORE VARIABLES");
+//        System.out.println("ADDRESS SPACE FULL, COULD NOT DEFINE MORE VARIABLES");
         return false;
     }
 

@@ -10,7 +10,7 @@ public class Mutex {
 
     public Mutex(Scheduler scheduler) {
         this.resourceBlocked = new LinkedList<>();
-//        this.status = status;
+        this.status = Status.ONE;
         this.scheduler = scheduler;
     }
 

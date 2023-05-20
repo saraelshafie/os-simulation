@@ -6,7 +6,6 @@ import java.util.Scanner;
 public class Kernel {
 
     private Mutex fileAccess;
-
     private Mutex input;
     private Mutex printer;
     private Scheduler scheduler;
@@ -50,7 +49,7 @@ public class Kernel {
         //mesh aarfen :)))))
     }
 
-    public void executeInstruction(Process process, String instruction) throws FileNotFoundException {
+    public void executeInstruction(Process process, String instruction) throws IOException {
         Scanner scanner = new Scanner(System.in);
 
         String[] ins = instruction.split(" ");
@@ -64,6 +63,12 @@ public class Kernel {
                 toAssign = scanner.nextLine();
 //                System.out.println("x = " + input);
 
+            } else if (ins[2].equals("readFile")) {
+
+                String fileName = (String) process.getVar(ins[3]);
+                BufferedReader br = new BufferedReader(new FileReader(fileName));
+                toAssign = br.readLine();
+
             } else toAssign = ins[2];
 
             try {
@@ -74,10 +79,20 @@ public class Kernel {
             // write (varName: toAssign) in process address space
             process.addVar(varName, toAssign);
 
+
         } else if (ins[0].equals("print")) {
             // fetch x from process address space
-            Object var = process.getVar(ins[1]);
-            System.out.println(var);
+            Object data;
+
+            if (ins[1].equals("readFile")) {
+                String fileName = (String) process.getVar(ins[3]);
+                BufferedReader br = new BufferedReader(new FileReader(fileName));
+                data = br.readLine();
+            } else
+                data = process.getVar(ins[1]);
+
+            System.out.println(data);
+
         } else if (ins[0].equals("writeFile")) {
             String fileName = (String) process.getVar(ins[1]);
             Object data = process.getVar(ins[2]);
@@ -94,6 +109,7 @@ public class Kernel {
             for (int i = x; i <= y; i++) {
                 System.out.println(i);
             }
+
         } else if (ins[0].equals("semWait")) {
 
             switch (ins[1]) {
@@ -111,7 +127,7 @@ public class Kernel {
         }
     }
 
-    public void run(Process process) throws FileNotFoundException {
+    public void run(Process process) throws IOException {
         int pc = process.getPC();
         process.setPC(pc + 1);
 
@@ -165,8 +181,7 @@ public class Kernel {
         }
     }
 
-    public Pair<Integer, Integer> fitsInMemory(int progSize) throws IOException {
-
+    public Pair<Integer, Integer> fitsInMemory2(int progSize) throws IOException {
 
         int empty = 0;
         int j = 0;
@@ -185,7 +200,7 @@ public class Kernel {
                 startIdx = -1;
             }
 
-            if (empty >= progSize) {
+            if (empty == progSize) {
 //                System.out.println("Suitable slot found from " + startIdx + " to " + (startIdx + progSize - 1));
                 return new Pair<Integer, Integer>(startIdx, startIdx + progSize - 1);
             }
@@ -196,11 +211,28 @@ public class Kernel {
         return null;
     }
 
-    // (x)
-    // null
-    // null
-    // null
-    // y
+    public Pair<Integer, Integer> fitsInMemory(int progSize) throws IOException {
+
+        int empty = 0;
+        int startIdx = 0;
+
+        for (int i = 0; i < memory.length; i++) {
+            Pair<String, Object> p = memory[i];
+
+            if (memory[i] == null) {
+                empty++;
+                if (empty == 1)
+                    startIdx = i;
+            } else
+                empty = 0;
+
+            if (empty == progSize) {
+                return new Pair<Integer, Integer>(startIdx, startIdx + progSize - 1);
+            }
+        }
+
+        return null;
+    }
 
     public Process createNewProcess(String fileName) throws IOException {
 
@@ -231,7 +263,6 @@ public class Kernel {
                 memory[i] = pair;
             }
 
-
             //Reserve places for future variable insertions
             for (int j = pcb.getEndBoundary(); j > pcb.getEndBoundary() - 3; j--) {
                 memory[j] = new Pair<>();
@@ -247,54 +278,82 @@ public class Kernel {
 
     public static void main(String[] args) throws IOException {
         Pair<String, Object>[] memory = new Pair[40];
-
         Kernel kernel = new Kernel();
         kernel.memory = memory;
-
+//
+//        memory[2] = new Pair<>("x", new Integer(3));
+//        memory[3] = new Pair<>("ins", "assign x input");
+//        memory[4] = new Pair<>("ins", "print y");
+//
+//        memory[8] = new Pair<>();
+//        memory[9] = new Pair<>();
+//
+//        displayMemory(memory);
+//
+//
         Process p1 = kernel.createNewProcess("Program_1.txt");
-//        displayMemory(memory);
-//        System.out.println(p1.getStartBoundary() + ", " + p1.getEndBoundary());
-
+//
         Process p2 = kernel.createNewProcess("Program_2.txt");
-//        displayMemory(memory);
-
+//
         Process p3 = kernel.createNewProcess("Program_3.txt");
-//        displayMemory(memory);
 
-        //semWait userInput
-        kernel.run(p2);
-
-        //assign a input
-        kernel.run(p2);
-//        displayMemory(memory);
-
-        //assign b input
-        kernel.run(p2);
-//        displayMemory(memory);
-
-        //semSignal userInput
-        kernel.run(p2);
-
-        //semWait file
-        kernel.run(p2);
-
-        //writeFile a b
-        kernel.run(p2);
-
-        //semSignal file
-        kernel.run(p2);
-
-//        System.out.println(p2.getPC());
-
-
-//        memory[1] = new Pair<>("x", new Integer(3));
-//        memory[2] = new Pair<>("ins", "assign x input");
-//        memory[3] = new Pair<>("ins", "print y");
+        /* ------------------------ PROGRAM 1 RUN------------------------------------------*/
+//        kernel.run(p1);
 //
+//        kernel.run(p1);
 //
-//        displayMemory(memory);
-//        System.out.println();
+//        kernel.run(p1);
+//
+//        kernel.run(p1);
+//
+//        kernel.run(p1);
+//
+//        kernel.run(p1);
+//
+//        kernel.run(p1);
 
+
+        /* ------------------------ PROGRAM 2 RUN------------------------------------------*/
+
+////        //semWait userInput
+//        kernel.run(p2);
+////
+////        //assign a input
+//        kernel.run(p2);
+////
+////        //assign b input
+//        kernel.run(p2);
+////
+////        //semSignal userInput
+//        kernel.run(p2);
+////
+////        //semWait file
+//        kernel.run(p2);
+////
+////        //writeFile a b
+//        kernel.run(p2);
+////
+////        //semSignal file
+//        kernel.run(p2);
+
+        /* ------------------------ PROGRAM 3 RUN------------------------------------------*/
+        kernel.run(p3);
+
+        kernel.run(p3);
+
+        kernel.run(p3);
+
+        kernel.run(p3);
+
+        kernel.run(p3);
+
+        kernel.run(p3);
+
+        kernel.run(p3);
+
+        kernel.run(p3);
+
+        kernel.run(p3);
 
 //        System.out.println(String.format("%16s", "null"));
 

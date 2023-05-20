@@ -22,4 +22,9 @@ public class Pair<K, V> {
     public String toString() {
         return "(" + key.toString() + ", " + value.toString() + ")";
     }
+
+    public boolean isReserved() {
+        return this.key == null && this.value == null;
+    }
+
 }
