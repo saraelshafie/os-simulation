@@ -6,6 +6,8 @@ public class PCB {
     private int startBoundary;
     private int endBoundary;
 
+    private boolean isOnDisk;
+
 
     public PCB(int PC, int startBoundary, int endBoundary) {
         this.PC = PC;
@@ -13,6 +15,13 @@ public class PCB {
         this.endBoundary = endBoundary;
         this.pid = ++maxID;
         this.state = State.READY;
+    }
+
+    public boolean isOnDisk(){
+        return isOnDisk;
+    }
+    public void setOnDisk(boolean onDisk) {
+        isOnDisk = onDisk;
     }
 
     public int getPid() {

@@ -7,14 +7,13 @@ public class Process {
     private PCB pcb;
     public Pair<String, Object>[] memory;
 
-    public Process() {
-
-    }
 
     public Process(PCB pcb, Pair[] memory) {
         this.pcb = pcb;
         this.memory = memory;
     }
+
+
 
     public int getID() {
         return pcb.getPid();
@@ -69,4 +68,7 @@ public class Process {
     }
 
 
+    public PCB getPCB() {
+        return pcb;
+    }
 }
