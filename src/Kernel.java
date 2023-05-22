@@ -199,19 +199,31 @@ public class Kernel {
         }
         br.close();
 
+
+        PCB pcb = new PCB();
+        Process process = new Process(pcb, memory);
+
+        hardDisk.add(new Pair<>("PCB", pcb));
+
+        while ((line = br.readLine()) != null) {
+            Pair<String, Object> pair = new Pair<>("ins", line);
+            hardDisk.add(pair);
+        }
+
         //Plus 3 to accomodate for 3 locations for future variables
         Pair<Integer, Integer> range = fitsInMemory(progSize + 3);
-
 
         if (range == null) {
             // RAM CANNOT ACCOMMODATE PROCESS
             // SWAP FROM DISK
-            swapFromMemToDisk(progSize + 3);
-            range = fitsInMemory(progSize + 3);
-        }
-        PCB pcb = new PCB(range.getKey(), range.getKey(), range.getValue());
+//            swapFromMemToDisk(progSize + 3);
+//            range = fitsInMemory(progSize + 3);
+            swapFromDiskToMem(process, progSize + 4);
 
-        Process process = new Process(pcb, memory);
+        }
+
+//        PCB pcb = new PCB(range.getKey(), range.getKey(), range.getValue());
+
 
         br = new BufferedReader(new FileReader(fileName));
 
@@ -237,10 +249,10 @@ public class Kernel {
     }
 
 
-    public void swapFromDiskToMem(Process processOnDisk) throws IOException {
+    public void swapFromDiskToMem(Process processOnDisk, int progSize) throws IOException {
         ArrayList<Pair<String, Object>> temp = new ArrayList<>();
 
-        int progSize = processOnDisk.getEndBoundary() - processOnDisk.getStartBoundary() + 1;
+//        int progSize = processOnDisk.getEndBoundary() - processOnDisk.getStartBoundary() + 1;
 
         for (int i = 0; i < memory.length; i++) {
 
@@ -268,7 +280,8 @@ public class Kernel {
                 }
                 i = pcb.getEndBoundary();
             } else {
-                getFromDiskToMemory(processOnDisk, range);
+                loadFromDiskToMemory(processOnDisk, range);
+                updateOnDisk(pcb);  //need to pass temp as process already removed
                 pcb.setOnDisk(true);
                 return;
             }
@@ -277,7 +290,7 @@ public class Kernel {
 
     }
 
-    public void getFromDiskToMemory(Process processOnDisk, Pair<Integer, Integer> range) {
+    public void loadFromDiskToMemory(Process processOnDisk, Pair<Integer, Integer> range) {
         Pair<Integer, Integer> rangeOnDisk = null; //startBound
         for (int i = 0; i < hardDisk.size(); i++) {
             Pair<String, Object> pair = hardDisk.get(i);
@@ -327,7 +340,7 @@ public class Kernel {
                 }
                 i = pcb.getEndBoundary();
             } else {
-                removeFromMemoryToDisk(pcb);
+                updateOnDisk(pcb);
                 pcb.setOnDisk(true);
                 return;
             }
@@ -337,7 +350,7 @@ public class Kernel {
 
     }
 
-    public void removeFromMemoryToDisk(PCB processOnMemPCB) {
+    public void updateOnDisk(PCB processOnMemPCB) {
         int startOnDisk = 0;
 
         for (int i = 0; i < hardDisk.size(); i++) {
@@ -360,6 +373,15 @@ public class Kernel {
         Pair<String, Object>[] memory = new Pair[40];
         Kernel kernel = new Kernel(2);
         kernel.memory = memory;
+
+        Process p1 = kernel.createNewProcess("Program_1.txt");
+//
+        Process p2 = kernel.createNewProcess("Program_2.txt");
+//
+        Process p3 = kernel.createNewProcess("Program_3.txt");
+
+
+        kernel.scheduler.schedule();
 //
 //        memory[2] = new Pair<>("x", new Integer(3));
 //        memory[3] = new Pair<>("ins", "assign x input");
@@ -371,11 +393,8 @@ public class Kernel {
 //        displayMemory(memory);
 //
 //
-        Process p1 = kernel.createNewProcess("Program_1.txt");
-//
-        Process p2 = kernel.createNewProcess("Program_2.txt");
-//
-        Process p3 = kernel.createNewProcess("Program_3.txt");
+
+
 
         /* ------------------------ PROGRAM 1 RUN------------------------------------------*/
 //        kernel.run(p1);

@@ -48,9 +48,14 @@ public class Scheduler {
             Process process = ready.remove();
             process.setState(State.RUNNING);
             running = process;
+            Pair<Integer, Integer> range;
+            if (process.getPCB().isOnDisk()) {
+                if ((range = kernel.fitsInMemory(process.getEndBoundary() - process.getStartBoundary() + 1)) != null) {
+                    kernel.loadFromDiskToMemory(process, range);
+                } else {
+                    kernel.swapFromDiskToMem(process);
+                }
 
-            if(process.getPCB().isOnDisk()) {
-                kernel.swapFromDiskToMem(process);
                 process.getPCB().setOnDisk(false);
             }
 
@@ -61,20 +66,19 @@ public class Scheduler {
                 ready.add(process);
                 process.setState(State.READY);
             } else {
-                process.setState(State.FINISHED);
-                kernel.removeFromMemoryToDisk(process.getPCB());
+                process.setState(State.FINISHED);  //still need to delete it from memory
+                kernel.updateOnDisk(process.getPCB());
             }
         }
     }
 
-    public boolean readyListContainsID(int pid){
-        for (Process p : ready){
+    public boolean readyListContainsID(int pid) {
+        for (Process p : ready) {
             if (p.getID() == pid)
                 return true;
         }
         return false;
     }
-
 
 
 }

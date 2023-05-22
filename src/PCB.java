@@ -17,9 +17,15 @@ public class PCB {
         this.state = State.READY;
     }
 
-    public boolean isOnDisk(){
+    public PCB() {
+        this.pid = ++maxID;
+        this.state = State.READY;
+    }
+
+    public boolean isOnDisk() {
         return isOnDisk;
     }
+
     public void setOnDisk(boolean onDisk) {
         isOnDisk = onDisk;
     }
