@@ -230,7 +230,7 @@ public class Kernel {
         return null;
     }
 
-    public Process createNewProcess(String fileName) throws IOException {
+    public Process createNewProcess2(String fileName) throws IOException {
 
         BufferedReader br = new BufferedReader(new FileReader(fileName));
         String line;
@@ -290,6 +290,60 @@ public class Kernel {
         process.setState(State.READY);
         return process;
     }
+
+    public Process createNewProcess(String fileName) throws IOException {
+
+        BufferedReader br = new BufferedReader(new FileReader(fileName));
+        String line;
+        int progSize = 0;
+
+        //Accumulate to count instructions
+        while ((line = br.readLine()) != null)
+            progSize++;
+        br.close();
+
+        //Plus 3 to accomodate for 3 locations for future variables
+        Pair<Integer, Integer> range = fitsInMemory(progSize + 3);
+
+
+        if (range == null) {
+            // RAM CANNOT ACCOMMODATE PROCESS
+            // SWAP FROM DISK
+//            swapFromMemToDisk(progSize + 3);
+            range = fitsInMemory(progSize + 3);
+        }
+        
+        PCB pcb = new PCB(range.getKey() + 5, range.getKey(), range.getValue());
+
+        Process process = new Process(pcb, memory);
+
+        br = new BufferedReader(new FileReader(fileName));
+
+        memory[process.getStartBoundary()] = new Pair<>("PID", process.getID());
+        memory[process.getStartBoundary() + 1] = new Pair<>("State", process.getState());
+        memory[process.getStartBoundary() + 2] = new Pair<>("PC", process.getPC());
+        memory[process.getStartBoundary() + 3] = new Pair<>("StartBoundary", process.getEndBoundary());
+        memory[process.getStartBoundary() + 4] = new Pair<>("EndBoundary", process.getStartBoundary());
+
+
+        for (int i = pcb.getStartBoundary() + 5; (line = br.readLine()) != null; i++) {
+            Pair<String, Object> pair = new Pair<>("ins", line);
+            memory[i] = pair;
+        }
+
+        //Reserve places for future variable insertions
+        for (int j = pcb.getEndBoundary(); j > pcb.getEndBoundary() - 3; j--)
+            memory[j] = new Pair<>();
+
+        br.close();
+
+        scheduler.getReady().add(process);
+        process.setState(State.READY);
+
+
+        return process;
+    }
+
 
 
     public void swapFromDiskToMem(Process processOnDisk, int progSize) throws IOException {
