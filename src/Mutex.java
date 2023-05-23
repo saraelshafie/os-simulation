@@ -53,6 +53,7 @@ public class Mutex {
         } else {
             resourceBlocked.add(p);
             scheduler.getBlocked().add(p);
+            p.setState(State.BLOCKED);
         }
     }
 
@@ -65,6 +66,7 @@ public class Mutex {
                 scheduler.getBlocked().remove(pNew);
                 scheduler.getReady().add(pNew);
                 ownerID = pNew.getID();
+                pNew.setState(State.READY);
             }
         }
     }

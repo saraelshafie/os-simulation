@@ -14,6 +14,9 @@ public class Process {
     }
 
 
+    public int getProgSize() {
+        return this.getEndBoundary() - this.getStartBoundary() + 5;
+    }
 
     public int getID() {
         return pcb.getPid();
@@ -41,6 +44,14 @@ public class Process {
 
     public int getStartBoundary() {
         return pcb.getStartBoundary();
+    }
+
+    public void setStartBoundary(int startBoundary) {
+        pcb.setStartBoundary(startBoundary);
+    }
+
+    public void setEndBoundary(int endBoundary) {
+        pcb.setEndBoundary(endBoundary);
     }
 
     public boolean addVar(String varName, Object value) {
@@ -71,4 +82,11 @@ public class Process {
     public PCB getPCB() {
         return pcb;
     }
+
+    public String toString() {
+        return "PROCESS " + this.getID();
+    }
+
 }
+
+

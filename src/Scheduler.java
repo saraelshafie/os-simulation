@@ -1,6 +1,8 @@
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Scanner;
 
 public class Scheduler {
     private Queue<Process> blocked;
@@ -44,31 +46,69 @@ public class Scheduler {
 
 
     public void schedule() throws IOException {
+
+        int c = 1;
+        Scanner scanner = new Scanner(System.in);
+
         while (!ready.isEmpty()) {
+
+//            System.out.println("READY QUEUE: " + ready);
+//            System.out.println("BLOCKED QUEUE: " + blocked);
+
+
             Process process = ready.remove();
             process.setState(State.RUNNING);
             running = process;
             Pair<Integer, Integer> range;
+
             if (process.getPCB().isOnDisk()) {
-                if ((range = kernel.fitsInMemory(process.getEndBoundary() - process.getStartBoundary() + 1)) != null) {
+
+                System.out.println("PROCESS " + process.getID() + " SWAPPED FROM DISK");
+
+                if ((range = kernel.fitsInMemory(process.getProgSize())) != null) {
                     kernel.loadFromDiskToMemory(process, range);
                 } else {
-                    kernel.swapFromDiskToMem(process);
+                    kernel.swapFromDiskToMem(process, process.getProgSize());
                 }
 
                 process.getPCB().setOnDisk(false);
             }
 
-            for (int i = 0; i < quantum; i++)
-                kernel.run(process);
+            for (int i = 0; i < quantum; i++) {
+                System.out.println("PROCESS " + process.getID() + " IS CURRENTLY RUNNING");
+                System.out.println("INS# " + c);
+                System.out.println("PC = " + process.getPC());
+                System.out.println("READY QUEUE: " + ready);
+                System.out.println("BLOCKED QUEUE: " + blocked);
 
-            if (process.getPC() <= process.getEndBoundary() - 3) {  //adds to readyList if process didn't finish executing
+                kernel.run(process);
+                Kernel.displayMemory(kernel.getMemory());
+                System.out.print("Enter dummy: ");
+                String dummy = scanner.nextLine();
+                System.out.println("___________________________________________");
+                c++;
+                if (process.getPC() > process.getEndBoundary() - 3 || blocked.contains(process))
+                    break;
+            }
+
+
+            if (process.getState() == State.BLOCKED) {
+                continue;
+            } else if (process.getPC() <= process.getEndBoundary() - 3) {  //adds to readyList if process didn't finish executing
                 ready.add(process);
                 process.setState(State.READY);
             } else {
                 process.setState(State.FINISHED);  //still need to delete it from memory
-                kernel.updateOnDisk(process.getPCB());
+                ArrayList<Pair<String, Object>> onMemory = new ArrayList<>();
+
+                for (int i = process.getStartBoundary(); i <= process.getEndBoundary(); i++) {
+                    onMemory.add(kernel.getMemory()[i]);
+                    kernel.getMemory()[i] = null;
+                }
+
+                kernel.updateOnDisk(process.getPCB(), onMemory);
             }
+
         }
     }
 
