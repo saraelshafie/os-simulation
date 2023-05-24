@@ -67,6 +67,7 @@ public class Mutex {
                 scheduler.getReady().add(pNew);
                 ownerID = pNew.getID();
                 pNew.setState(State.READY);
+                scheduler.updateState(pNew , State.READY);
             }
         }
     }

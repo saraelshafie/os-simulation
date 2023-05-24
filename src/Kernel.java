@@ -1,11 +1,6 @@
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedList;
-import java.util.Scanner;
 
 public class Kernel {
 
@@ -14,8 +9,14 @@ public class Kernel {
     private final Mutex printer;
     private final Scheduler scheduler;
 
+    private Object input1 = null;
+    private Object input2 = null;
+    private Object input3 = null;
+
+    private SystemCalls systemCalls;
+
+
     private Pair<String, Object>[] memory;
-    private final ArrayList<Pair<String, Object>> hardDisk;
     public final String DISK_PATH = "disk.txt";
 
     public Kernel(int quantum) {
@@ -24,29 +25,28 @@ public class Kernel {
         this.input = new Mutex(this.scheduler);
         this.printer = new Mutex(this.scheduler);
         this.memory = new Pair[40];
-        this.hardDisk = new ArrayList<>();
+        this.systemCalls = new SystemCalls(this.memory);
     }
 
     public Pair<String, Object>[] getMemory() {
         return memory;
     }
 
-    public ArrayList<Pair<String, Object>> getHardDisk() {
-        return hardDisk;
-    }
-
-
-    public Object readFromDisk(String filename) {
-
-        return null;
-    }
-
-    public void writeToDisk(String filename, Object data) {
+    public Object getInputVar(int PID) {
+        switch (PID) {
+            case 1:
+                return input1;
+            case 2:
+                return input2;
+            case 3:
+                return input3;
+            default:
+                return null;
+        }
 
     }
 
     public void executeInstruction(Process process, String instruction) throws IOException {
-        Scanner scanner = new Scanner(System.in);
 
         String[] ins = instruction.split(" ");
 
@@ -54,20 +54,15 @@ public class Kernel {
             Object toAssign;
             String varName = ins[1];
 
-            if (ins[2].equals("input")) {
-                System.out.println("Please enter a value: ");
-                toAssign = scanner.nextLine();
-//                System.out.println("x = " + input);
-
-            } else if (ins[2].equals("readFile")) {
-
-                String fileName = (String) process.getVar(ins[3]);
-                Path path = Paths.get(fileName);
-
-                toAssign = Files.readString(path);
-
-
-            } else toAssign = ins[2];
+            toAssign = getInputVar(process.getID());
+            if(toAssign == null){
+                toAssign = ins[2];
+            }
+            switch (process.getID()) {
+                case 1: input1 = null;
+                case 2: input2 = null;
+                case 3: input3 = null;
+            }
 
             try {
                 toAssign = Integer.parseInt((String) toAssign);
@@ -75,40 +70,59 @@ public class Kernel {
             }
 
             // write (varName: toAssign) in process address space
-            process.addVar(varName, toAssign);
+//            process.addVar(varName, toAssign);
+            systemCalls.writeToMem(varName, toAssign , process);
 
+
+
+        }else if (ins[0].equals("input")) {
+            System.out.println("Please enter a value: ");
+            if(process.getID() == 1)
+                input1 = systemCalls.takeInput();
+            else if (process.getID() == 2)
+                input2 = systemCalls.takeInput();
+            else
+                input3 = systemCalls.takeInput();
+
+        } else if (ins[0].equals("readFile")) {
+
+            String fileName = (String) systemCalls.readFromMem(ins[1] , process);
+
+            if(process.getID() == 1)
+                input1 = systemCalls.readFromDisk(fileName);
+            else if (process.getID() == 2)
+                input2 = systemCalls.readFromDisk(fileName);
+            else
+                input3 = systemCalls.readFromDisk(fileName);
 
         } else if (ins[0].equals("print")) {
             // fetch x from process address space
             Object data;
 
             if (ins[1].equals("readFile")) {
-                String fileName = (String) process.getVar(ins[3]);
-                Path path = Paths.get(fileName);
-                data = Files.readString(path);
+                String fileName = (String) systemCalls.readFromMem(ins[3] , process); //leh feeh readFile gowa print???
 
-            } else data = process.getVar(ins[1]);
+                data = systemCalls.readFromDisk(fileName);
 
-            System.out.println(data);
+            } else data = systemCalls.readFromMem(ins[1] , process);
+
+            systemCalls.printData(data);
 
         } else if (ins[0].equals("writeFile")) {
-            String fileName = (String) process.getVar(ins[1]);
-            Object data = process.getVar(ins[2]);
+            String fileName = (String) systemCalls.readFromMem(ins[1] , process);
+            Object data = systemCalls.readFromMem(ins[2] , process);
 
             System.out.println("fileName: " + fileName);
             System.out.println("data: " + data);
 
-            PrintWriter pw = new PrintWriter(new FileOutputStream(fileName, true));
-            pw.append(data.toString());
-            pw.append("\n");
-            pw.close();
+            systemCalls.writeToDisk(fileName, data);
 
         } else if (ins[0].equals("printFromTo")) {
-            int x = (int) process.getVar(ins[1]);
-            int y = (int) process.getVar(ins[2]);
+            int x = (int) systemCalls.readFromMem(ins[1] , process);
+            int y = (int) systemCalls.readFromMem(ins[2] , process);
 
             for (int i = x; i <= y; i++) {
-                System.out.println(i);
+                systemCalls.printData(i);
             }
 
         } else if (ins[0].equals("semWait")) {
@@ -246,15 +260,20 @@ public class Kernel {
         int progSize = 0;
 
         //Accumulate to count instructions
-        while ((line = br.readLine()) != null)
+        while ((line = br.readLine()) != null){
             progSize++;
+            String[] lineSplit = line.split(" ");
+            if((lineSplit[0].equals("assign") && (lineSplit[2].equals("input") || lineSplit[2].equals("readFile")) )
+                || (lineSplit[0].equals("print") && lineSplit[1].equals("readFile")))
+                progSize++;
+
+        }
         br.close();
 
         //Plus 3 to accommodate for 3 locations for future variables
         Pair<Integer, Integer> range = fitsInMemory(progSize + 8);
 
-        if (range == null)
-            range = freeSpaceInMemory(progSize + 8);
+        if (range == null) range = freeSpaceInMemory(progSize + 8);
 
 
         PCB pcb = new PCB(range.getKey() + 5, range.getKey(), range.getValue());
@@ -271,8 +290,29 @@ public class Kernel {
 
 
         for (int i = pcb.getStartBoundary() + 5; (line = br.readLine()) != null; i++) {
+            String[] lineSplit = line.split(" ");
+
+            if (lineSplit[0].equals("assign")) {
+                if (lineSplit[lineSplit.length - 1].equals("input")){
+                    memory[i] = new Pair<>("ins", lineSplit[2]);
+                    i++;
+                    line = lineSplit[0] + " " + lineSplit[1];
+                } else if(lineSplit[2].equals("readFile")) {
+                    memory[i] = new Pair<>("ins", lineSplit[2] + " " + lineSplit[3]);
+                    i++;
+                    line = lineSplit[0] + " " + lineSplit[1];
+                }
+
+            } else if (lineSplit[0].equals("print") && lineSplit[1].equals("readFile")) {
+                memory[i] = new Pair<>("ins", lineSplit[2] + " " + lineSplit[3]);
+                i++;
+                line = lineSplit[0];
+            }
+
             Pair<String, Object> pair = new Pair<>("ins", line);
             memory[i] = pair;
+
+
         }
 
         //Reserve places for future variable insertions
@@ -302,7 +342,7 @@ public class Kernel {
             int start = (int) memory[i + 3].getValue();
             int end = (int) memory[i + 4].getValue();
 
-            if (scheduler.getRunning().getID() == pid) {  //can't swap a running process
+            if (scheduler.getRunning() != null && scheduler.getRunning().getID() == pid) {  //can't swap a running process
                 i = end;
                 continue;
             }
@@ -338,8 +378,7 @@ public class Kernel {
                 allProcesses.addAll(scheduler.getBlocked());
                 allProcesses.addAll(scheduler.getReady());
                 for (Process p : allProcesses) {
-                    if (p.getID() == pid)
-                        p.setOnDisk(true);
+                    if (p.getID() == pid) p.setOnDisk(true);
                 }
 
 
@@ -369,11 +408,9 @@ public class Kernel {
                     oldStartBoundary = (int) pair.getValue();
                     pair.setValue(range.getKey());
                 }
-                if (pair.getKey().equals("EndBoundary"))
-                    pair.setValue(range.getValue());
-                if (pair.getKey().equals("State"))
-                    pair.setValue(State.RUNNING);
-                if (pair.getKey().equals("PC")){
+                if (pair.getKey().equals("EndBoundary")) pair.setValue(range.getValue());
+                if (pair.getKey().equals("State")) pair.setValue(State.RUNNING);
+                if (pair.getKey().equals("PC")) {
                     System.out.println("OLD START: " + oldStartBoundary);
                     System.out.println("OLD PC: " + pair.getValue());
                     pair.setValue(range.getKey() + ((int) pair.getValue() - oldStartBoundary));
@@ -438,9 +475,11 @@ public class Kernel {
 
 
     public static void main(String[] args) throws Exception {
-        Pair<String, Object>[] memory = new Pair[40];
+//        Pair<String, Object>[] memory = new Pair[40];
         Kernel kernel = new Kernel(2);
-        kernel.memory = memory;
+//        kernel.memory = memory;
+
+
 
 //        kernel.eraseDisk();
 //        State state = State.READY;
@@ -481,7 +520,7 @@ public class Kernel {
 //
 
 
-
+//
         /* ------------------------ PROGRAM 1 RUN------------------------------------------*/
 //        kernel.run(p1);
 //
@@ -496,6 +535,8 @@ public class Kernel {
 //        kernel.run(p1);
 //
 //        kernel.run(p1);
+
+
 
 
         /* ------------------------ PROGRAM 2 RUN------------------------------------------*/
@@ -535,11 +576,12 @@ public class Kernel {
 //        kernel.run(p3);
 //
 //        kernel.run(p3);
-//
+
 //        kernel.run(p3);
 //
 //        kernel.run(p3);
 
+//        displayMemory(memory);
 //        System.out.println(String.format("%16s", "null"));
 
 //        loadProcessIntoMemory();
