@@ -1,5 +1,10 @@
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.Scanner;
 
 public class Kernel {
@@ -11,9 +16,10 @@ public class Kernel {
 
     private Pair<String, Object>[] memory;
     private final ArrayList<Pair<String, Object>> hardDisk;
+    public final String DISK_PATH = "disk.txt";
 
     public Kernel(int quantum) {
-        this.scheduler = new Scheduler(quantum, this);
+        this.scheduler = new Scheduler(this);
         this.fileAccess = new Mutex(this.scheduler);
         this.input = new Mutex(this.scheduler);
         this.printer = new Mutex(this.scheduler);
@@ -56,8 +62,10 @@ public class Kernel {
             } else if (ins[2].equals("readFile")) {
 
                 String fileName = (String) process.getVar(ins[3]);
-                BufferedReader br = new BufferedReader(new FileReader(fileName));
-                toAssign = br.readLine();
+                Path path = Paths.get(fileName);
+
+                toAssign = Files.readString(path);
+
 
             } else toAssign = ins[2];
 
@@ -76,8 +84,9 @@ public class Kernel {
 
             if (ins[1].equals("readFile")) {
                 String fileName = (String) process.getVar(ins[3]);
-                BufferedReader br = new BufferedReader(new FileReader(fileName));
-                data = br.readLine();
+                Path path = Paths.get(fileName);
+                data = Files.readString(path);
+
             } else data = process.getVar(ins[1]);
 
             System.out.println(data);
@@ -230,67 +239,6 @@ public class Kernel {
         return null;
     }
 
-    public Process createNewProcess2(String fileName) throws IOException {
-
-        BufferedReader br = new BufferedReader(new FileReader(fileName));
-        String line;
-        int progSize = 0;
-
-        //Accumulate to count instructions
-        while ((line = br.readLine()) != null) {
-            progSize++;
-        }
-        br.close();
-
-
-        br = new BufferedReader(new FileReader(fileName));
-
-        PCB pcb = new PCB();
-        Process process = new Process(pcb, memory);
-
-        hardDisk.add(new Pair<>("PCB", pcb));
-
-        while ((line = br.readLine()) != null) {
-            Pair<String, Object> pair = new Pair<>("ins", line);
-            hardDisk.add(pair);
-        }
-
-        for (int i = 0; i < 3; i++) {
-            hardDisk.add(new Pair<>());
-        }
-
-        //Plus 3 to accommodate for 3 locations for future variables
-        Pair<Integer, Integer> range = fitsInMemory(progSize + 4);
-
-        if (range == null) {
-            swapFromDiskToMem(process, progSize + 4);
-        } else {
-            process.setStartBoundary(range.getKey());
-            process.setEndBoundary(range.getValue());
-            process.setPC(range.getKey() + 1);
-
-            br = new BufferedReader(new FileReader(fileName));
-
-            memory[process.getStartBoundary()] = new Pair<>("PCB", pcb);
-
-            for (int i = pcb.getStartBoundary() + 1; (line = br.readLine()) != null; i++) {
-                Pair<String, Object> pair = new Pair<>("ins", line);
-                memory[i] = pair;
-            }
-
-            //Reserve places for future variable insertions
-            for (int j = pcb.getEndBoundary(); j > pcb.getEndBoundary() - 3; j--) {
-                memory[j] = new Pair<>();
-            }
-
-            br.close();
-        }
-
-        scheduler.getReady().add(process);
-        process.setState(State.READY);
-        return process;
-    }
-
     public Process createNewProcess(String fileName) throws IOException {
 
         BufferedReader br = new BufferedReader(new FileReader(fileName));
@@ -302,17 +250,13 @@ public class Kernel {
             progSize++;
         br.close();
 
-        //Plus 3 to accomodate for 3 locations for future variables
-        Pair<Integer, Integer> range = fitsInMemory(progSize + 3);
+        //Plus 3 to accommodate for 3 locations for future variables
+        Pair<Integer, Integer> range = fitsInMemory(progSize + 8);
+
+        if (range == null)
+            range = freeSpaceInMemory(progSize + 8);
 
 
-        if (range == null) {
-            // RAM CANNOT ACCOMMODATE PROCESS
-            // SWAP FROM DISK
-//            swapFromMemToDisk(progSize + 3);
-            range = fitsInMemory(progSize + 3);
-        }
-        
         PCB pcb = new PCB(range.getKey() + 5, range.getKey(), range.getValue());
 
         Process process = new Process(pcb, memory);
@@ -322,8 +266,8 @@ public class Kernel {
         memory[process.getStartBoundary()] = new Pair<>("PID", process.getID());
         memory[process.getStartBoundary() + 1] = new Pair<>("State", process.getState());
         memory[process.getStartBoundary() + 2] = new Pair<>("PC", process.getPC());
-        memory[process.getStartBoundary() + 3] = new Pair<>("StartBoundary", process.getEndBoundary());
-        memory[process.getStartBoundary() + 4] = new Pair<>("EndBoundary", process.getStartBoundary());
+        memory[process.getStartBoundary() + 3] = new Pair<>("StartBoundary", process.getStartBoundary());
+        memory[process.getStartBoundary() + 4] = new Pair<>("EndBoundary", process.getEndBoundary());
 
 
         for (int i = pcb.getStartBoundary() + 5; (line = br.readLine()) != null; i++) {
@@ -344,141 +288,186 @@ public class Kernel {
         return process;
     }
 
+    public Pair<Integer, Integer> freeSpaceInMemory(int progSize) throws IOException {
 
-
-    public void swapFromDiskToMem(Process processOnDisk, int progSize) throws IOException {
         ArrayList<Pair<String, Object>> onMemory = new ArrayList<>();
-
-//        int progSize = processOnDisk.getEndBoundary() - processOnDisk.getStartBoundary() + 1;
 
         for (int i = 0; i < memory.length; i++) {
 
             if (memory[i] == null) continue;
 
-            PCB pcb = (PCB) memory[i].getValue();
+            int pid = (int) memory[i].getValue();
+            State state;
+            int pc;
+            int start = (int) memory[i + 3].getValue();
+            int end = (int) memory[i + 4].getValue();
 
-            if (scheduler.getRunning().getID() == pcb.getPid()) {  //can't swap a running process
-                i = pcb.getEndBoundary();
+            if (scheduler.getRunning().getID() == pid) {  //can't swap a running process
+                i = end;
                 continue;
             }
 
-            for (int j = pcb.getStartBoundary(); j <= pcb.getEndBoundary(); j++) {
+
+            for (int j = start; j <= end; j++) {
                 onMemory.add(memory[j]);
                 memory[j] = null;
+
             }
 
             Pair<Integer, Integer> range = fitsInMemory(progSize);
 
             if (range == null) {
                 int c = 0;
-                for (int j = pcb.getStartBoundary(); j <= pcb.getEndBoundary(); j++)
+                for (int j = start; j <= end; j++)
                     memory[j] = onMemory.remove(c);
 
-                i = pcb.getEndBoundary();
-            } else {
-                loadFromDiskToMemory(processOnDisk, range);
-                updateOnDisk(pcb, onMemory);  //need to pass onMemory as process already removed
-                pcb.setOnDisk(true);
-                return;
-            }
-        }
-    }
-
-    public void loadFromDiskToMemory(Process processOnDisk, Pair<Integer, Integer> range) {
-        Pair<Integer, Integer> rangeOnDisk = null; //startBound
-        for (int i = 0; i < hardDisk.size(); i++) {
-            Pair<String, Object> pair = hardDisk.get(i);
-
-            if (pair.getKey().equals("PCB") && ((PCB) pair.getValue()).getPid() == processOnDisk.getID()) {
-                rangeOnDisk = new Pair<>(i, i + (range.getValue() - range.getKey()));
-                PCB pcb = ((PCB) pair.getValue());
-                pcb.setStartBoundary(range.getKey()); //set startBoundary
-                pcb.setEndBoundary(range.getValue()); //set endBoundary
-                pcb.setPC(range.getKey() + 1);
-                break;
-            }
-        }
-
-        int j = range.getKey(); //start boundary
-
-        for (int i = rangeOnDisk.getKey(); i <= rangeOnDisk.getValue(); i++) {
-            memory[j] = hardDisk.get(i);
-            j++;
-        }
-    }
-
-
-//    public void swapFromMemToDisk(int progSize) throws IOException {
-//
-//        ArrayList<Pair<String, Object>> onMemory = new ArrayList<>();
-//
-//        for (int i = 0; i < memory.length; i++) {
-//
-//            if (memory[i] == null)
-//                continue;
-//
-//            PCB pcb = (PCB) memory[i].getValue();
-//
-//            if (scheduler.getRunning().getID() == pcb.getPid()) {  //can't swap a running process
-//                i = pcb.getEndBoundary();
-//                continue;
-//            }
-//
-//            for (int j = pcb.getStartBoundary(); j <= pcb.getEndBoundary(); j++) {
-//                onMemory.add(memory[j]);
-//                memory[j] = null;
-//            }
-//
-//            if (fitsInMemory(progSize) == null) {
-//                int c = 0;
-//                for (int j = pcb.getStartBoundary(); j <= pcb.getEndBoundary(); j++) {
-//                    memory[j] = onMemory.remove(c);
-//                }
-//                i = pcb.getEndBoundary();
-//            } else {
-//                updateOnDisk(pcb, onMemory);
-//                pcb.setOnDisk(true);
-//                return;
-//            }
-//        }
-//    }
-
-    public void updateOnDisk(PCB processOnMemPCB, ArrayList<Pair<String, Object>> onMemory) {
-        int diskIdx = 0;
-
-        for (int i = 0; i < hardDisk.size(); i++) {
-            Pair<String, Object> pair = hardDisk.get(i);
-            if (pair.isReserved())
+                i = end;
                 continue;
-            if (pair.getKey().equals("PCB") && ((PCB) pair.getValue()).getPid() == processOnMemPCB.getPid()) {
-                diskIdx = i;
-                break;
+            } else {
+                //transfer to disk
+                PrintWriter pw = new PrintWriter(new FileOutputStream(DISK_PATH, true));
+
+                for (Pair<String, Object> pair : onMemory) {
+                    String data = pair.getKey() + "," + pair.getValue();
+                    pw.append(data.toString());
+                    pw.append("\n");
+                }
+                pw.close();
+
+                LinkedList<Process> allProcesses = new LinkedList<>();
+                allProcesses.addAll(scheduler.getBlocked());
+                allProcesses.addAll(scheduler.getReady());
+                for (Process p : allProcesses) {
+                    if (p.getID() == pid)
+                        p.setOnDisk(true);
+                }
+
+
+                return range;
             }
         }
 
-        for (Pair<String, Object> pair : onMemory) {
-            hardDisk.remove(diskIdx);
-            hardDisk.add(diskIdx, pair);
-            diskIdx++;
-        }
-
+        return null;
     }
 
 
-    public static void main(String[] args) throws IOException {
+    public void loadFromDiskToMemory(ArrayList<Pair<String, Object>> dataOnDisk, Pair<Integer, Integer> range) {
+
+//        System.out.println("IN LOAD FROM DISK");
+        System.out.println("RANGE: " + range.getKey() + ", " + range.getValue());
+        int memoryIdx = range.getKey();
+        int oldStartBoundary = 0;
+
+        for (Pair<String, Object> pair : dataOnDisk) {
+//            System.out.println("load print");
+//            System.out.println(pair);
+//            System.out.println("START INDEX" + memoryIdx);
+
+
+            if (!pair.isReserved()) {
+                if (pair.getKey().equals("StartBoundary")) {
+                    oldStartBoundary = (int) pair.getValue();
+                    pair.setValue(range.getKey());
+                }
+                if (pair.getKey().equals("EndBoundary"))
+                    pair.setValue(range.getValue());
+                if (pair.getKey().equals("State"))
+                    pair.setValue(State.RUNNING);
+                if (pair.getKey().equals("PC")){
+                    System.out.println("OLD START: " + oldStartBoundary);
+                    System.out.println("OLD PC: " + pair.getValue());
+                    pair.setValue(range.getKey() + ((int) pair.getValue() - oldStartBoundary));
+                    System.out.println("NEW PC: " + pair.getValue());
+                }
+
+            }
+
+            memory[memoryIdx] = pair;
+            memoryIdx++;
+        }
+    }
+
+
+    public ArrayList<Pair<String, Object>> readDisk() throws IOException {
+
+        ArrayList<Pair<String, Object>> list = new ArrayList<>();
+
+        BufferedReader br = new BufferedReader(new FileReader(DISK_PATH));
+        String line;
+
+        while ((line = br.readLine()) != null) {
+            String[] splitLine = line.split(",");
+
+            String id = splitLine[0];
+            String data = splitLine[1];
+            Object object;
+
+            if (id.equals("null")) {
+                id = null;
+                object = null;
+            } else if (id.equals("State")) {
+                object = switch (data) {
+                    case "RUNNING" -> State.RUNNING;
+                    case "BLOCKED" -> State.BLOCKED;
+                    case "FINISHED" -> State.FINISHED;
+                    default -> State.READY;
+                };
+            } else {
+                try {
+                    object = Integer.parseInt(data);
+                } catch (Exception e) {
+                    object = data;
+                }
+            }
+
+            Pair<String, Object> pair = new Pair<>(id, object);
+            list.add(pair);
+        }
+
+        br.close();
+
+        System.out.println("READ DISK: " + list);
+
+        return list;
+    }
+
+    public void eraseDisk() throws IOException {
+        FileWriter fileWriter = new FileWriter(DISK_PATH, false);
+        fileWriter.close();
+    }
+
+
+    public static void main(String[] args) throws Exception {
         Pair<String, Object>[] memory = new Pair[40];
         Kernel kernel = new Kernel(2);
         kernel.memory = memory;
 
-        Process p1 = kernel.createNewProcess("Program_1.txt");
+//        kernel.eraseDisk();
+//        State state = State.READY;
+//        System.out.println(state);
+//        kernel.readDisk();
 
-        Process p2 = kernel.createNewProcess("Program_2.txt");
+//        Path path = Paths.get("disk.txt");
+//        String content = Files.readString(path);
+//        String[] separated = content.split("%%%%%%%%%%%%%");
+//        String[] firstProc = separated[1].split("\\n");
+//
+//        String test = "pid 5\nstart 10\nend 20";
+//        String[] splitTest = test.split("\n");
+//
+//
+//        System.out.println(Arrays.toString(splitTest));
+
+
+//        Process p1 = kernel.createNewProcess("Program_1.txt");
+//
+//        Process p2 = kernel.createNewProcess("Program_2.txt");
 //
 //        Process p3 = kernel.createNewProcess("Program_3.txt");
 
 
-        displayDisk(kernel.hardDisk);
-//        kernel.scheduler.schedule();
+//        displayDisk(kernel.hardDisk);
+        kernel.scheduler.schedule();
 //
 //        memory[2] = new Pair<>("x", new Integer(3));
 //        memory[3] = new Pair<>("ins", "assign x input");

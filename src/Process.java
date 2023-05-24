@@ -6,6 +6,7 @@ import java.util.Scanner;
 public class Process {
     private PCB pcb;
     public Pair<String, Object>[] memory;
+    private boolean isOnDisk;
 
 
     public Process(PCB pcb, Pair[] memory) {
@@ -15,7 +16,15 @@ public class Process {
 
 
     public int getProgSize() {
-        return this.getEndBoundary() - this.getStartBoundary() + 5;
+        return this.getEndBoundary() - this.getStartBoundary() + 1;
+    }
+
+    public boolean isOnDisk() {
+        return isOnDisk;
+    }
+
+    public void setOnDisk(boolean onDisk) {
+        isOnDisk = onDisk;
     }
 
     public int getID() {
