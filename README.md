@@ -1,0 +1,2 @@
+# os-simulation
+This project involves building a basic interpreter to execute programs represented in text files that become processes. The project includes the implementation of a memory system to store and manage processes. Additionally, mutexes are integrated to ensure mutual exclusion for critical resources. A scheduler is also developed to efficiently manage and schedule processes within the system.
